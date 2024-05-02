@@ -14,20 +14,42 @@
  *
  * Learn more at https://developers.cloudflare.com/workers/
  */
+import { createClient } from '@supabase/supabase-js';
 
 export default {
 	// The scheduled handler is invoked at the interval set in our wrangler.toml's
 	// [[triggers]] configuration.
-	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-		// A Cron Trigger can make requests to other endpoints on the Internet,
-		// publish to a Queue, query a D1 Database, and much more.
-		//
-		// We'll keep it simple and make an API call to a Cloudflare API:
-		let resp = await fetch('https://api.cloudflare.com/client/v4/ips');
-		let wasSuccessful = resp.ok ? 'success' : 'fail';
+	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+		if(!env.SUPABASE_URL || !env.SUPABASE_KEY || env.SUPABASE_URL === '' || env.SUPABASE_KEY === '') {
+			throw new Error('Missing SUPABASE_URL or SUPABASE_KEY');
+		}
 
-		// You could store this result in KV, write to a D1 Database, or publish to a Queue.
-		// In this template, we'll just log the result:
-		console.log(`trigger fired at ${event.cron}: ${wasSuccessful}`);
+		const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
+		
+		const startTime = new Date().toISOString();
+		console.log('Starting delete-old-meter-readings-worker at', startTime);
+
+		// Calculate the date three months ago
+		const deleteBeforeDate = new Date();
+		deleteBeforeDate.setMonth(deleteBeforeDate.getMonth() - 3);
+
+		// Delete old meter readings from the database
+		try {
+			const { status, error, statusText } = await supabase.from('MeterReadings').delete().lt('createdAt', deleteBeforeDate.toISOString());
+
+			if (status !== 204 || error ) {
+				throw new Error(statusText || 'Error deleting old meter readings');
+			} 
+				
+			console.log(`Deleted old meter readings`);
+		} catch (err) {
+			console.error('Error deleting old meter readings:', err);
+		}
+
+		const endTime = new Date().toISOString();
+		console.log('Finished delete-old-meter-readings-worker at', endTime);
+
+		const timeTaken = new Date(endTime).getTime() - new Date(startTime).getTime();
+		const message = `Finished delete-old-meter-readings-worker in ${timeTaken} ms`;
 	},
 };

@@ -2,6 +2,6 @@
 // by running `wrangler types`
 
 interface Env {
-	SUPABASE_URL: "";
-	SUPABASE_KEY: "";
+	SUPABASE_URL: string;
+	SUPABASE_KEY: string;
 }
